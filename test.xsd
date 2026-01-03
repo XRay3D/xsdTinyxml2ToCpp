@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+    <!-- Перечисления -->
+    <xs:simpleType name="PriorityType">
+        <xs:restriction base="xs:string">
+            <xs:enumeration value="LOW"/>
+            <xs:enumeration value="MEDIUM"/>
+            <xs:enumeration value="HIGH"/>
+            <xs:enumeration value="CRITICAL"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <!-- Базовый тип -->
+    <xs:complexType name="BaseEntity" abstract="true">
+        <xs:sequence>
+            <xs:element name="id" type="xs:int"/>
+            <xs:element name="createdAt" type="xs:dateTime"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- Тип с mixed content -->
+    <xs:complexType name="DescriptionType" mixed="true">
+        <xs:sequence>
+            <xs:element name="note" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="lang" type="xs:string" use="optional" default="en"/>
+    </xs:complexType>
+
+    <!-- Тип с simpleContent -->
+    <xs:complexType name="AmountType">
+        <xs:simpleContent>
+            <xs:extension base="xs:decimal">
+                <xs:attribute name="currency" type="xs:string" use="required"/>
+            </xs:extension>
+        </xs:simpleContent>
+    </xs:complexType>
+
+    <!-- Сложный тип с наследованием -->
+    <xs:complexType name="TaskType">
+        <xs:complexContent>
+            <xs:extension base="BaseEntity">
+                <xs:sequence>
+                    <xs:element name="title" type="xs:string"/>
+                    <xs:choice minOccurs="0" maxOccurs="1">
+                        <xs:element name="description" type="DescriptionType"/>
+                        <xs:element name="shortDescription" type="xs:string"/>
+                    </xs:choice>
+                    <xs:element name="priority" type="PriorityType" default="MEDIUM"/>
+                    <xs:element name="subtasks" minOccurs="0" maxOccurs="unbounded">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="name" type="xs:string"/>
+                                <xs:element name="completed" type="xs:boolean" default="false"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
+                </xs:sequence>
+                <xs:attribute name="status" type="xs:string" use="optional"/>
+                <xs:attribute name="estimatedHours" type="xs:decimal"/>
+            </xs:extension>
+        </xs:complexContent>
+    </xs:complexType>
+
+    <!-- Тип с xs:all -->
+    <xs:complexType name="ContactInfoType">
+        <xs:all>
+            <xs:element name="email" type="xs:string" minOccurs="0"/>
+            <xs:element name="phone" type="xs:string" minOccurs="0"/>
+            <xs:element name="address" type="xs:string" minOccurs="0"/>
+        </xs:all>
+    </xs:complexType>
+
+    <!-- Корневой элемент -->
+    <xs:element name="Project">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="name" type="xs:string"/>
+                <xs:element name="tasks" type="TaskType" maxOccurs="unbounded"/>
+                <xs:element name="budget" type="AmountType" minOccurs="0"/>
+                <xs:element name="contacts" type="ContactInfoType"/>
+            </xs:sequence>
+            <xs:attribute name="version" type="xs:string" fixed="1.0"/>
+        </xs:complexType>
+    </xs:element>
+
+</xs:schema>
