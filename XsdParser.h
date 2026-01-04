@@ -8,12 +8,15 @@
 #include <vector>
 
 // Включаем tinyxml2
-#include "tinyxml2.h"
+// #include "tinyxml2.h"
+
+#include "xrxml.hpp"
 
 namespace Xsd {
 
 using namespace std::literals;
 
+using std ::map;
 using std ::string;
 using std ::string_view;
 using std ::vector;
@@ -26,6 +29,7 @@ using std ::vector;
 // Структура для представления XSD простого типа (enum)
 struct Enum {
     string name;
+    string ccName;
     string documentation; // Комментарии из <xs:annotation>
     vector<string> values;
     string baseType; // Базовый тип (string, int и т.д.)
@@ -40,20 +44,22 @@ struct Field {
     string name;
     string type;
     string documentation;
-    bool isOptional{false};
+    bool isOptional{};
     int minOccurs{1};
-    int maxOccurs{1};        // -1 означает unbounded
-    bool isAttribute{false}; // Является ли атрибутом
+    int maxOccurs{1};   // -1 означает unbounded
+    bool isAttribute{}; // Является ли атрибутом
 };
 
 // Структура для представления XSD complexType
 struct ComplexType {
+    string oprigName;
     string name;
+    string ccName;
     string documentation;
     vector<Field> fields;
-    vector<ComplexType> complexTypes_;
+    // vector<ComplexType> complexTypes_;
     string baseType; // Наследование
-    bool isAbstract{false};
+    bool isAbstract{};
 
     // Генерация C++ кода для структуры
     string generateHeaderCode() const;
@@ -65,7 +71,7 @@ struct Element {
     string name;
     string type;
     string documentation;
-    bool isComplex{false};
+    bool isComplex{};
 };
 
 // Основной класс парсера
@@ -93,7 +99,7 @@ private:
     vector<Enum> enums;
     vector<ComplexType> complexTypes;
     vector<Element> elements;
-    /*inline static const*/ std::map<string, string_view> typeMap{
+    /*inline static const*/ map<string, string_view, std::less<>> typeMap{
         {"xs:string",                "std::string"sv               }, // Для преобразования XSD типов в C++
         {"xs:int",                   "int32_t"sv                   },
         {"xs:integer",               "int32_t"sv                   },
@@ -110,6 +116,7 @@ private:
         {"xs:hexBinary",             "std::vector<unsigned char>"sv},
         {"xs:anyURI",                "std::string"sv               },
         {"xs:QName",                 "std::string"sv               },
+        {"xs:Name",                  "std::string"sv               },
         {"xs:normalizedString",      "std::string"sv               },
         {"xs:token",                 "std::string"sv               },
         {"xs:unsignedInt",           "uint32_t"sv                  },
@@ -121,18 +128,18 @@ private:
     };
 
     // XML документ
-    tinyxml2::XMLDocument doc_;
+    XML::Document doc;
 
     // Приватные методы парсинга
-    void parseSimpleType(const tinyxml2::XMLElement* element);
-    void parseComplexType(const tinyxml2::XMLElement* element);
-    void parseElement(const tinyxml2::XMLElement* element);
-    void parseSchema(const tinyxml2::XMLElement* schemaElement);
+    void parseSimpleType(const XML::Element* element);
+    void parseComplexType(const XML::Element* element);
+    void parseElement(const XML::Element* element);
+    void parseSchema(const XML::Element* schemaElement);
 
     // Вспомогательные методы
-    string getDocumentation(const tinyxml2::XMLElement* element) const;
-    string convertXsdTypeToCpp(const string& xsdType) const;
-    static string sanitizeName(string name);
+    string getDocumentation(const XML::Element* element) const;
+    string convertXsdTypeToCpp(string_view xsdType, bool* isb = {}) const;
+    static string sanitizeName(string_view name);
 
     // Методы генерации кода
     // string generateEnumHeader(const Enum& enumType) const;
@@ -145,20 +152,20 @@ private:
     // Утилиты для работы со строками
     static string toCamelCase(const string& str);
     static string toUpperCase(string str);
-    static string trim(const string& str);
+    static string trim(string_view str);
 
     ////////////////////////////////////////
     // Дополним приватные методы в классе Parser
 private:
-    void parseAttributes(const tinyxml2::XMLElement* element, ComplexType& complexType);
+    void parseAttributes(const XML::Element* element, ComplexType& complexType);
 
-    void parseSequenceElements(const tinyxml2::XMLElement* sequence, ComplexType& complexType);
-    void parseChoiceElements(const tinyxml2::XMLElement* choice, ComplexType& complexType);
-    void parseAllElements(const tinyxml2::XMLElement* all, ComplexType& complexType);
-    void parseGroupReference(const tinyxml2::XMLElement* groupRef, ComplexType& complexType);
-    void parseElementDetails(const tinyxml2::XMLElement* elementNode, Field& field);
-    void handleComplexContent(const tinyxml2::XMLElement* complexContent, ComplexType& complexType);
-    void handleSimpleContent(const tinyxml2::XMLElement* simpleContent, ComplexType& complexType);
+    void parseSequenceElements(const XML::Element* sequence, ComplexType& complexType);
+    void parseChoiceElements(const XML::Element* choice, ComplexType& complexType);
+    void parseAllElements(const XML::Element* all, ComplexType& complexType);
+    void parseGroupReference(const XML::Element* groupRef, ComplexType& complexType);
+    void parseElementDetails(const XML::Element* elementNode, Field& field);
+    void handleComplexContent(const XML::Element* complexContent, ComplexType& complexType);
+    void handleSimpleContent(const XML::Element* simpleContent, ComplexType& complexType);
 
     // Вспомогательные методы
     // bool isBuiltInType(const string& typeName) const;

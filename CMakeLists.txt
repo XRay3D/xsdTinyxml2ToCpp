@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 # https://msiter.ru/references/xsd-elements
-project(XSD_TINYXML2_TO_CPP LANGUAGES CXX)
+project(XSD_TO_CPP LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,17 +8,22 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/bin)
 
 file(GLOB SRC *.h *.cpp)
 
-find_package(tinyxml2 REQUIRED)
+include(FetchContent)
+FetchContent_Declare(
+  xrxml
+  GIT_REPOSITORY ${CMAKE_CURRENT_LIST_DIR}/../XRXml
+  GIT_TAG master)
+FetchContent_MakeAvailable(xrxml)
 
-add_executable(XSD_TINYXML2_TO_CPP ${SRC})
+add_executable(XSD_TO_CPP ${SRC})
 
 include_directories(bin)
 
-target_link_libraries(XSD_TINYXML2_TO_CPP PRIVATE tinyxml2::tinyxml2)
+target_link_libraries(XSD_TO_CPP PRIVATE XR::Xml)
 
 include(GNUInstallDirs)
 install(
-  TARGETS XSD_TINYXML2_TO_CPP
+  TARGETS XSD_TO_CPP
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 

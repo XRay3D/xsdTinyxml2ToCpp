@@ -13,7 +13,7 @@ int main(int argc, const char* argv[]) {
     argc = 3;
 
     if(argc < 2) {
-        std::cerr << "Использование: " << argv[0] << " <xsd_file> [output_dir]" << std::endl;
+        std::println(std::cerr, "Использование: {} <xsd_file> [output_dir]", argv[0]);
         return 1;
     }
 
@@ -27,7 +27,7 @@ int main(int argc, const char* argv[]) {
 
         // Парсим XSD схему
         if(!parser.parse(xsdFile)) {
-            std::cerr << "Ошибка при парсинге XSD схемы" << std::endl;
+            std::println(std::cerr, "Ошибка при парсинге XSD схемы");
             return 1;
         }
 
@@ -36,20 +36,20 @@ int main(int argc, const char* argv[]) {
 
         // Генерируем C++ код
         if(!parser.generateCppCode(outputDir, "Generated")) {
-            std::cerr << "Ошибка при генерации C++ кода" << std::endl;
+            std::println(std::cerr, "Ошибка при генерации C++ кода");
             return 1;
         }
 
-        std::cout << "\nГенерация завершена успешно!" << std::endl;
-        std::cout << "Сгенерированные файлы:" << std::endl;
-        std::cout << "  - " << outputDir << "/Enums.h" << std::endl;
-        std::cout << "  - " << outputDir << "/Enums.cpp" << std::endl;
-        std::cout << "  - " << outputDir << "/Types.h" << std::endl;
-        std::cout << "  - " << outputDir << "/Types.cpp" << std::endl;
-        std::cout << "  - " << outputDir << "/CMakeLists.txt" << std::endl;
+        std::println(std::cout, "\nГенерация завершена успешно!");
+        std::println(std::cout, "Сгенерированные файлы:");
+        std::println(std::cout, "  - {}/Enums.h", outputDir);
+        std::println(std::cout, "  - {}/Enums.cpp", outputDir);
+        std::println(std::cout, "  - {}/Types.h", outputDir);
+        std::println(std::cout, "  - {}/Types.cpp", outputDir);
+        std::println(std::cout, "  - {}/CMakeLists.txt", outputDir);
 
     } catch(const std::exception& e) {
-        std::cerr << "Исключение: " << e.what() << std::endl;
+        std::println(std::cerr, "Исключение: {}", e.what());
         return 1;
     }
 
