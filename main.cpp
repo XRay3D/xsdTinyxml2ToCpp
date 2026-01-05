@@ -7,7 +7,7 @@ int main(int argc, const char* argv[]) {
         argv[0],
         // "../example.xsd",
         "../CMSIS-SVD.xsd",
-        ".",
+        "../../qt/SVD_Viewer/svd",
     };
     argv = argv_;
     argc = 3;

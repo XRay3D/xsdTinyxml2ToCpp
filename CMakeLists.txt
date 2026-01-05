@@ -11,7 +11,8 @@ file(GLOB SRC *.h *.cpp)
 include(FetchContent)
 FetchContent_Declare(
   xrxml
-  GIT_REPOSITORY ${CMAKE_CURRENT_LIST_DIR}/../XRXml
+  GIT_REPOSITORY
+    git@github.com:XRay3D/XRXml.git # ${CMAKE_CURRENT_LIST_DIR}/../XRXml
   GIT_TAG master)
 FetchContent_MakeAvailable(xrxml)
 

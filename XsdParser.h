@@ -52,7 +52,7 @@ struct Field {
 
 // Структура для представления XSD complexType
 struct ComplexType {
-    string oprigName;
+    string origName;
     string name;
     string ccName;
     string documentation;
@@ -60,6 +60,7 @@ struct ComplexType {
     // vector<ComplexType> complexTypes_;
     string baseType; // Наследование
     bool isAbstract{};
+    bool isRoot{};
 
     // Генерация C++ кода для структуры
     string generateHeaderCode() const;
@@ -98,7 +99,9 @@ private:
     // std::map<string, string> /*vector<ReString> */ reStrings;
     vector<Enum> enums;
     vector<ComplexType> complexTypes;
+    // vector<ComplexType> groups;
     vector<Element> elements;
+    map<string, ComplexType, std::less<>> groups;
     /*inline static const*/ map<string, string_view, std::less<>> typeMap{
         {"xs:string",                "std::string"sv               }, // Для преобразования XSD типов в C++
         {"xs:int",                   "int32_t"sv                   },
@@ -132,7 +135,8 @@ private:
 
     // Приватные методы парсинга
     void parseSimpleType(const XML::Element* element);
-    void parseComplexType(const XML::Element* element);
+    bool parseComplexType(const XML::Element* element);
+    void parseGroup(const XML::Element* element);
     void parseElement(const XML::Element* element);
     void parseSchema(const XML::Element* schemaElement);
 

@@ -33,6 +33,7 @@ Parser::~Parser() { clear(); }
 
 bool Parser::parse(const string& filename) {
     clear();
+    doc.saveComments = true;
 
     // Загружаем XML документ
     bool error = doc.load(filename);
@@ -56,10 +57,10 @@ bool Parser::parse(const string& filename) {
     // Парсим схему
     parseSchema(root);
 
-    println(std::cout, "Парсинг завершен успешно!");
-    println(std::cout, "Найдено перечислений: {}", enums.size());
-    println(std::cout, "Найдено complexType: {}", complexTypes.size());
-    println(std::cout, "Найдено элементов: {}", elements.size());
+    println("Парсинг завершен успешно!");
+    println("Найдено перечислений: {}", enums.size());
+    println("Найдено complexType: {}", complexTypes.size());
+    println("Найдено элементов: {}", elements.size());
 
     return true;
 }
@@ -144,7 +145,7 @@ bool Parser::generateCppCode(const string& outputDir,
     println(structHeader, "#include <optional>");
     println(structHeader, "#include <stdexcept>");
     println(structHeader, "#include <variant>");
-    println(structHeader, "#include \"tinyxml2.h\"");
+    println(structHeader, "#include \"xrxmlser.hpp\"");
     println(structHeader, "#include \"Enums.h\"\n");
 
     if(!namespaceName.empty()) {
@@ -210,7 +211,7 @@ bool Parser::generateCppCode(const string& outputDir,
         cmakeFile.close();
     }
 
-    println(std::cout, "Код успешно сгенерирован в директории: {}", outputDir);
+    println("Код успешно сгенерирован в директории: {}", outputDir);
     return true;
 }
 
@@ -220,173 +221,22 @@ void Parser::clear() {
     elements.clear();
     doc.root.clear();
 }
-#if 0
-void Parser::parseComplexType(const XML::Element* element) {
-    ComplexType complexType;
 
-    // Получаем имя типа
-    string_view name = element->attrVal("name");
-    if(name.empty()) {
-        println(std::cerr, "ComplexType без имени, пропускаем");
-        return;
-    }
-    complexType.name = sanitizeName(name);
-
-    // Получаем документацию
-    complexType.documentation = getDocumentation(element);
-
-    // Проверяем, является ли абстрактным
-    string_view abstract = element->attrVal("abstract");
-    if(abstract && abstract=="true"sv) {
-        complexType.isAbstract = true;
-    }
-
-    // Ищем sequence, choice, all или complexContent/simpleContent
-    const XML::Element* sequence = element->firstChild("xs:sequence");
-    if(!sequence) sequence = element->firstChild("sequence");
-
-    const XML::Element* choice = element->firstChild("xs:choice");
-    if(!choice) choice = element->firstChild("choice");
-
-    const XML::Element* all = element->firstChild("xs:all");
-    if(!all) all = element->firstChild("all");
-
-    const XML::Element* complexContent = element->firstChild("xs:complexContent");
-    if(!complexContent) complexContent = element->firstChild("complexContent");
-
-    const XML::Element* simpleContent = element->firstChild("xs:simpleContent");
-    if(!simpleContent) simpleContent = element->firstChild("simpleContent");
-
-    // Обработка атрибутов
-    const XML::Element* attrValGroup = element->firstChild("xs:attrValGroup");
-    if(!attrValGroup) attrValGroup = element->firstChild("attrValGroup");
-
-    // Парсим элементы в sequence
-    if(sequence) {
-        parseSequenceElements(sequence, complexType);
-    }
-
-    // Парсим элементы в choice
-    if(choice) {
-        parseChoiceElements(choice, complexType);
-    }
-
-    // Парсим элементы в all
-    if(all) {
-        parseAllElements(all, complexType);
-    }
-
-    // Парсим атрибуты
-    parseAttributes(element, complexType);
-
-    complexTypes_.push_back(complexType);
-}
-
-void Parser::parseSequenceElements(const XML::Element* sequence, ComplexType& complexType) {
-    for(const XML::Element* child = sequence->firstChild();
-        child != nullptr;
-        child = child->NextSiblingElement()) {
-
-        string_view childName = child->Name();
-
-        if(testName(childName, "xs:element"sv)) {
-
-            Field field;
-            field.isAttribute = false;
-
-            // Имя элемента
-            string_view name = child->attrVal("name");
-            if(name) {
-                field.name = sanitizeName(name);
-            }
-
-            // Тип элемента
-            string_view type = child->attrVal("type");
-            if(type) {
-                field.type = convertXsdTypeToCpp(type);
-            }
-
-            // Документация
-            field.documentation = getDocumentation(child);
-
-            // Min/max occurs
-            string_view minOccurs = child->attrVal("minOccurs");
-            if(minOccurs) {
-                field.minOccurs = atoi(minOccurs);
-                field.isOptional = (field.minOccurs == 0);
-            }
-
-            string_view maxOccurs = child->attrVal("maxOccurs");
-            if(maxOccurs) {
-                if(maxOccurs=="unbounded"sv) {
-                    field.maxOccurs = -1; // unbounded
-                } else {
-                    field.maxOccurs = atoi(maxOccurs);
-                }
-            }
-
-            complexType.fields.push_back(field);
-        }
-    }
-}
-
-void Parser::parseAttributes(const XML::Element* element,
-    ComplexType& complexType) {
-    for(const XML::Element* child = element->firstChild();
-        child != nullptr;
-        child = child->NextSiblingElement()) {
-
-        string_view childName = child->Name();
-
-        if(testName(childName, "xs:attrVal"sv)) {
-
-            Field field;
-            field.isAttribute = true;
-
-            // Имя атрибута
-            string_view name = child->attrVal("name");
-            if(name) {
-                field.name = sanitizeName(name);
-            }
-
-            // Тип атрибута
-            string_view type = child->attrVal("type");
-            if(type) {
-                field.type = convertXsdTypeToCpp(type);
-            }
-
-            // Обязательность
-            string_view use = child->attrVal("use");
-            if(use && use=="required"sv) {
-                field.isOptional = false;
-                field.minOccurs = 1;
-            } else {
-                field.isOptional = true;
-                field.minOccurs = 0;
-            }
-
-            field.maxOccurs = 1; // Атрибуты всегда 0 или 1
-
-            complexType.fields.push_back(field);
-        }
-    }
-}
-#endif
 void Parser::printSummary() const {
-    println(std::cout, "=== XSD Parser Summary ===");
-    println(std::cout, "Enums: {}", enums.size());
+    println("=== XSD Parser Summary ===");
+    println("Enums: {}", enums.size());
     for(const auto& e: enums) {
-        println(std::cout, "  - {} ({} values)", e.name, e.values.size());
+        println("  - {} ({} values)", e.name, e.values.size());
     }
 
-    println(std::cout, "\nComplex Types: {}", complexTypes.size());
+    println("\nComplex Types: {}", complexTypes.size());
     for(const auto& ct: complexTypes) {
-        println(std::cout, "  - {} ({} fields)", ct.name, ct.fields.size());
+        println("  - {} ({} fields)", ct.name, ct.fields.size());
     }
 
-    println(std::cout, "\nElements: {}", elements.size());
+    println("\nElements: {}", elements.size());
     for(const auto& elem: elements) {
-        println(std::cout, "  - {} ({})", elem.name, elem.type);
+        println("  - {} ({})", elem.name, elem.type);
     }
 }
 
@@ -407,9 +257,7 @@ void Parser::parseSimpleType(const XML::Element* element) {
     enumType.documentation = getDocumentation(element);
 
     // Ищем restriction/enumeration
-    const XML::Element* restriction = element->firstChild("xs:restriction");
-    if(!restriction)
-        restriction = element->firstChild("restriction");
+    const XML::Element* restriction = element->firstChildOf({"xs:restriction", "restriction"});
 
     if(!restriction) {
         println(std::cerr, "Простой тип без имени, пропускаем");
@@ -440,17 +288,17 @@ void Parser::parseSimpleType(const XML::Element* element) {
 }
 
 // Обновленный метод parseComplexType с поддержкой complexContent и simpleContent
-void Parser::parseComplexType(const XML::Element* element) {
+bool Parser::parseComplexType(const XML::Element* element) {
     ComplexType complexType;
 
     // Получаем имя типа
     string_view name = element->attrVal("name");
     if(name.empty()) {
         // Анонимный тип - генерируем имя
-        static int anonymousComplexCounter = 0;
-        complexType.ccName = complexType.name = "AnonymousComplexType_" + std::to_string(anonymousComplexCounter++);
+        static int counter = 0;
+        complexType.ccName = complexType.name = "AnonymousComplexType_" + std::to_string(counter++);
     } else {
-        complexType.oprigName = name;
+        complexType.origName = name;
         complexType.name = sanitizeName(name);
         complexType.ccName = toCamelCase(sanitizeName(name));
     }
@@ -459,30 +307,18 @@ void Parser::parseComplexType(const XML::Element* element) {
     complexType.documentation = getDocumentation(element);
 
     // Проверяем, является ли абстрактным
-    complexType.isAbstract = element->attrVal("abstract") == "true"sv;
+    complexType.isAbstract = element->attrVal("abstract") == "true";
 
     // Проверяем complexContent/simpleContent
-    const XML::Element* complexContent = element->firstChild("xs:complexContent");
-    if(!complexContent) complexContent = element->firstChild("complexContent");
 
-    const XML::Element* simpleContent = element->firstChild("xs:simpleContent");
-    if(!simpleContent) simpleContent = element->firstChild("simpleContent");
-
-    if(complexContent) {
+    if(const XML::Element* complexContent = element->firstChildOf({"xs:complexContent", "complexContent"});
+        complexContent) {
         handleComplexContent(complexContent, complexType);
-    } else if(simpleContent) {
+    } else if(const XML::Element* simpleContent = element->firstChildOf({"xs:simpleContent", "simpleContent"});
+        simpleContent) {
         handleSimpleContent(simpleContent, complexType);
     } else {
         // Обычный complexType с последовательностью/выбором/всем
-        const XML::Element* sequence = element->firstChild("xs:sequence");
-        if(!sequence) sequence = element->firstChild("sequence");
-
-        const XML::Element* choice = element->firstChild("xs:choice");
-        if(!choice) choice = element->firstChild("choice");
-
-        const XML::Element* all = element->firstChild("xs:all");
-        if(!all) all = element->firstChild("all");
-
         // Проверяем наличие mixed content
         if(element->attrVal("mixed") == "true"sv) {
             // mixed="true" означает, что могут быть и текст, и элементы
@@ -499,20 +335,18 @@ void Parser::parseComplexType(const XML::Element* element) {
         }
 
         // Парсим содержимое
-        if(sequence) {
+        if(const XML::Element* sequence = element->firstChildOf({"xs:sequence", "sequence"});
+            sequence) {
             parseSequenceElements(sequence, complexType);
-        } else if(choice) {
+        } else if(const XML::Element* choice = element->firstChildOf({"xs:choice", "choice"});
+            choice) {
             parseChoiceElements(choice, complexType);
-        } else if(all) {
+        } else if(const XML::Element* all = element->firstChildOf({"xs:all", "all"});
+            all) {
             parseAllElements(all, complexType);
-        } else {
-            // Проверяем, есть ли простой контент
-            const XML::Element* simpleContent = element->firstChild("xs:simpleContent");
-            if(!simpleContent) simpleContent = element->firstChild("simpleContent");
-
-            if(simpleContent) {
-                handleSimpleContent(simpleContent, complexType);
-            }
+        } else if(const XML::Element* simpleContent = element->firstChildOf({"xs:simpleContent", "simpleContent"});
+            simpleContent) { // Проверяем, есть ли простой контент
+            handleSimpleContent(simpleContent, complexType);
         }
 
         // Парсим атрибуты
@@ -520,34 +354,105 @@ void Parser::parseComplexType(const XML::Element* element) {
     }
 
     // Проверяем, не является ли этот тип дубликатом
-    bool isDuplicate = false;
-    for(const auto& existingType: complexTypes) {
-        if(existingType.name == complexType.name) {
-            isDuplicate = true;
-            break;
-        }
-    }
+    bool isDuplicate = r::find(complexTypes, complexType.name, &ComplexType::name) != complexTypes.end();
 
     if(!isDuplicate) {
         complexTypes.push_back(complexType);
     } else {
-        println(std::cout, "  Предупреждение: тип '{}' уже существует, пропускаем дубликат", complexType.name);
+        println("  Предупреждение: тип '{}' уже существует, пропускаем дубликат", complexType.name);
     }
+    return !isDuplicate;
+}
+
+void Parser::parseGroup(const XML::Element* element) {
+    ComplexType complexType;
+
+    // Получаем имя типа
+    string_view name = element->attrVal("name");
+    if(name.empty()) {
+        // Анонимный тип - генерируем имя
+        static int counter = 0;
+        complexType.ccName = complexType.name = "AnonymousGroupType_" + std::to_string(counter++);
+    } else {
+        complexType.origName = name;
+        complexType.name = sanitizeName(name);
+        complexType.ccName = toCamelCase(sanitizeName(name));
+    }
+
+    // Получаем документацию
+    complexType.documentation = getDocumentation(element);
+
+    // Проверяем, является ли абстрактным
+    complexType.isAbstract = element->attrVal("abstract") == "true";
+
+    // Проверяем complexContent/simpleContent
+
+    // if(const XML::Element* complexContent = element->firstChildOf({"xs:complexContent", "complexContent"});
+    //     complexContent) {
+    //     handleComplexContent(complexContent, complexType);
+    // } else if(const XML::Element* simpleContent = element->firstChildOf({"xs:simpleContent", "simpleContent"});
+    //     simpleContent) {
+    //     handleSimpleContent(simpleContent, complexType);
+    // } else {
+    // Обычный complexType с последовательностью/выбором/всем
+    // Проверяем наличие mixed content
+    // if(element->attrVal("mixed") == "true"sv) {
+    //     // mixed="true" означает, что могут быть и текст, и элементы
+    //     Field textField;
+    //     textField.name = "textContent";
+    //     textField.type = "std::string";
+    //     textField.documentation = "Текстовое содержимое mixed content";
+    //     textField.isAttribute = false;
+    //     textField.isOptional = true;
+    //     textField.minOccurs = 0;
+    //     textField.maxOccurs = 1;
+    //     complexType.fields.push_back(textField);
+    // }
+
+    // Парсим содержимое
+    if(const XML::Element* sequence = element->firstChildOf({"xs:sequence", "sequence"});
+        sequence) {
+        parseSequenceElements(sequence, complexType);
+    } else if(const XML::Element* choice = element->firstChildOf({"xs:choice", "choice"});
+        choice) {
+        parseChoiceElements(choice, complexType);
+    } else if(const XML::Element* all = element->firstChildOf({"xs:all", "all"});
+        all) {
+        parseAllElements(all, complexType);
+    } else if(const XML::Element* simpleContent = element->firstChildOf({"xs:simpleContent", "simpleContent"});
+        simpleContent) { // Проверяем, есть ли простой контент
+        handleSimpleContent(simpleContent, complexType);
+    }
+
+    // Парсим атрибуты
+    parseAttributes(element, complexType);
+    // }
+
+    if(!groups.emplace(complexType.origName, std::move(complexType)).second)
+        println("  Предупреждение: group '{}' уже существует, пропускаем дубликат", complexType.name);
 }
 
 void Parser::parseElement(const XML::Element* element) {
     Element xsdElement;
 
-    if(string_view name = element->attrVal("name"); name.size())
+    bool isComplexType = testName(element->front()->name(), "xs:complexType")
+        && parseComplexType(element->front().get());
+
+    if(string_view name = element->attrVal("name"); name.size()) {
         xsdElement.name = sanitizeName(name);
+        if(isComplexType) {
+            complexTypes.back().isRoot = true;
+            complexTypes.back().origName = name;
+            complexTypes.back().name = sanitizeName(name);
+            complexTypes.back().ccName = toCamelCase(sanitizeName(name));
+        }
+    }
 
     if(string_view type = element->attrVal("type"); type.size()) {
         xsdElement.type = type;
-
         // Проверяем, является ли complexType
         // В реальном парсере нужно проверять по списку complexTypes
-        if(xsdElement.type.find(":") != std::string::npos)
-            xsdElement.isComplex = true;
+        xsdElement.isComplex = xsdElement.type.contains(":");
     }
 
     xsdElement.documentation = getDocumentation(element);
@@ -567,8 +472,8 @@ string normalize(string str) {
 string Enum::generateHeaderCode() const {
     std::stringstream ss;
 
-    if(documentation.size())
-        println(ss, "/*\n{}\n*/", documentation);
+    for(auto&& line: documentation | v::split('\n'))
+        println(ss, "// {:s}", line | v::drop_while(isspace));
 
     println(ss, "enum class {} {{", ccName);
 
@@ -630,27 +535,32 @@ string Enum::generateSourceCode() const {
 string ComplexType::generateHeaderCode() const {
     std::stringstream ss;
 
-    if(!documentation.empty()) {
-        println(ss, "/**\n * {}\n */", documentation);
+    for(auto&& line: documentation | v::split('\n')) {
+        println(ss, "// {:s}", line | v::drop_while(isspace));
     }
 
     // println(ss, R"([[="{}"sv]] //)", name2);
-    println(ss, "struct {} {{", ccName);
+
+    string attr = isRoot
+        ? std::format(R"([[=XML::Root("{}")]])", origName)
+        : std::format(R"([[=XML::Name("{:s}")]])", origName | v::take(origName.size() - 4));
+
+    println(ss, "struct {} {} {{", attr, ccName);
 
     // Поля
     for(const auto& field: fields) {
-        if(field.documentation.size())
-            println(ss, "    // {}", field.documentation);
+        for(auto&& line: field.documentation | v::split('\n'))
+            println(ss, "    // {:s}", line | v::drop_while(isspace));
 
         string type = field.type;
 
         // Если поле может встречаться много раз
         if(field.maxOccurs == -1 || field.maxOccurs > 1)
-            type = "std::vector<" + type + ">";
+            type = "[[= XML::Array]] std::vector<" + type + ">";
 
         // Если поле опциональное (minOccurs == 0)
-        // if(field.isOptional && field.maxOccurs == 1)
-        // type = "std::optional<" + type + ">";
+        if(field.isOptional && field.maxOccurs == 1)
+            type = "std::optional<" + type + ">";
 
         println(ss, "    {} {};", type, field.name);
     }
@@ -671,6 +581,7 @@ string ComplexType::generateHeaderCode() const {
     // println(ss, "    bool operator==(const {}& other) const;", name);
     // println(ss, "    bool operator!=(const {}& other) const;", name);
 
+    // println(ss, "    constexpr auto operator<=>(const {}&) const = default;", ccName);
     println(ss, "}};\n");
 
     return ss.str();
@@ -678,9 +589,9 @@ string ComplexType::generateHeaderCode() const {
 
 // Дополним метод generateSourceCode в ComplexType
 string ComplexType::generateSourceCode() const {
-#if 0
     std::stringstream ss;
 
+#if 0
     // Конструкторы
     println(ss, "{0}::{0}() {{", name);
 
@@ -842,43 +753,44 @@ string ComplexType::generateSourceCode() const {
 
     println(ss, "    return element;");
     println(ss, "}}\n");
+#endif
 
     return ss.str();
-
-#endif
 }
 
 void Parser::parseSchema(const XML::Element* schemaElement) {
     // Парсим все дочерние элементы
-
     for(auto&& child: *schemaElement) {
-        string_view elementName = child->name();
-        /*  */ if(testName(elementName, "xs:simpleType"sv)) {
-            parseSimpleType(child.get());
-        } else if(testName(elementName, "xs:complexType"sv)) {
-            parseComplexType(child.get());
-        } else if(testName(elementName, "xs:element"sv)) {
-            parseElement(child.get());
-        } else {
-            println(std::cerr, "{}", elementName);
-        }
+        string_view name = child->name();
+        if(testName(name, "xs:complexType"sv)) parseComplexType(child.get());
+        else if(testName(name, "xs:element"sv)) parseElement(child.get());
+        else if(testName(name, "xs:group"sv)) parseGroup(child.get());
+        else if(testName(name, "xs:simpleType"sv)) parseSimpleType(child.get());
+        else if(name.size()) println(std::cerr, "name {}", name);
     }
 }
 
 string Parser::getDocumentation(const XML::Element* element) const {
-    const XML::Element* annotation = element->firstChild("xs:annotation");
-    if(!annotation) annotation = element->firstChild("annotation");
-
-    if(annotation) {
-        const XML::Element* documentation = annotation->firstChild("xs:documentation");
-        if(!documentation) documentation = annotation->firstChild("documentation");
-
-        if(documentation && documentation->text().size()) {
+    if(const XML::Element* annotation = element->firstChildOf({"xs:annotation", "annotation"});
+        annotation) {
+        if(const XML::Element* documentation = annotation->firstChildOf({"xs:documentation", "documentation"});
+            documentation && documentation->text().size()) {
             return trim(documentation->text());
         }
     }
 
-    return "";
+    string documentation;
+    element = element->sibling(-1);
+    while(element && element->name().empty()) {
+        if(auto text = element->text(); text.starts_with("<!--") && text.ends_with("-->")) {
+            text.remove_suffix(3);
+            text.remove_prefix(4);
+            documentation = text + documentation;
+        }
+        element = element->sibling(-1);
+    }
+
+    return documentation;
 }
 
 string Parser::convertXsdTypeToCpp(string_view xsdType, bool* isb) const {
@@ -955,10 +867,10 @@ string Parser::toUpperCase(string str) {
 
 // Вспомогательные функции
 string Parser::trim(string_view str) {
-    size_t first = str.find_first_not_of(" \t\n\r");
+    size_t first = str.find_first_not_of(" \t\n\r"sv);
     if(first == std::string::npos) return "";
 
-    size_t last = str.find_last_not_of(" \t\n\r");
+    size_t last = str.find_last_not_of(" \t\n\r"sv);
     return string{str.substr(first, (last - first + 1))};
 }
 
@@ -986,14 +898,11 @@ void Parser::parseAttributes(const XML::Element* element, ComplexType& complexTy
                 field.type = convertXsdTypeToCpp(type);
             } else {
                 // Проверяем встроенный тип
-                const XML::Element* simpleType = child->firstChild("xs:simpleType");
-                if(!simpleType) simpleType = child->firstChild("simpleType");
 
-                if(simpleType) {
-                    const XML::Element* restriction = simpleType->firstChild("xs:restriction");
-                    if(!restriction) restriction = simpleType->firstChild("restriction");
-
-                    if(restriction) {
+                if(const XML::Element* simpleType = child->firstChildOf({"xs:simpleType", "simpleType"});
+                    simpleType) {
+                    if(const XML::Element* restriction = simpleType->firstChildOf({"xs:restriction", "restriction"});
+                        restriction) {
 
                         if(string_view base = restriction->attrVal("base"); base.size()) {
                             field.type = convertXsdTypeToCpp(base);
@@ -1034,44 +943,36 @@ void Parser::parseAttributes(const XML::Element* element, ComplexType& complexTy
             // Значение по умолчанию
 
             if(string_view defaultValue = child->attrVal("default"); defaultValue.size()) {
-                if(!field.documentation.empty()) {
-                    field.documentation += " ";
-                }
-                field.documentation += "[По умолчанию: " + std::string(defaultValue) + "]";
+                field.documentation += "\n[По умолчанию: " + std::string(defaultValue) + "]";
             }
 
             // Фиксированное значение
 
             if(string_view fixedValue = child->attrVal("fixed"); fixedValue.size()) {
-                if(!field.documentation.empty()) {
-                    field.documentation += " ";
-                }
-                field.documentation += "[Фиксированное значение: " + std::string(fixedValue) + "]";
+                field.documentation += "\n[Фиксированное значение: " + std::string(fixedValue) + "]";
             }
 
             complexType.fields.push_back(field);
         }
         // Обработка групп атрибутов
         else if(testName(childName, "xs:attrValGroup"sv)) {
-
             if(string_view ref = child->attrVal("ref"); ref.size()) {
-                println(std::cout, "  Информация: ссылка на группу атрибутов '{}' - требуется предварительное определение", ref);
+                println("  Информация: ссылка на группу атрибутов '{}' - требуется предварительное определение", ref);
             }
         }
     }
 }
 
 void Parser::parseSequenceElements(const XML::Element* sequence, ComplexType& complexType) {
-
     if(!sequence) return;
-
     // Обрабатываем все дочерние элементы sequence
     for(auto&& child: *sequence) {
         string_view elementName = child->name();
         if(testName(elementName, "xs:element"sv)) { // Элемент
             Field field;
             parseElementDetails(child.get(), field);
-            if(!field.name.empty()) complexType.fields.push_back(field);
+            if(!field.name.empty())
+                complexType.fields.emplace_back(std::move(field));
         } else if(testName(elementName, "xs:group"sv)) { // Группа элементов
             parseGroupReference(child.get(), complexType);
         } else if(testName(elementName, "xs:sequence"sv)) { // Последовательность внутри последовательности (вложенная)
@@ -1082,7 +983,7 @@ void Parser::parseSequenceElements(const XML::Element* sequence, ComplexType& co
             parseAllElements(child.get(), complexType);
         } else if(testName(elementName, "xs:any"sv)) { // Любой элемент
             // Пропускаем xs:any - сложно отобразить на статический C++ код
-            println(std::cout, "  Предупреждение: элемент <any> не поддерживается, пропускаем");
+            println("  Предупреждение: элемент <any> не поддерживается, пропускаем");
         }
     }
 }
@@ -1094,13 +995,13 @@ void Parser::parseChoiceElements(const XML::Element* choice, ComplexType& comple
     // Для choice мы создаем специальное поле с вариантами
     // В реальной реализации можно создать union или variant
 
-    println(std::cout, "  Предупреждение: элемент <choice> требует ручной обработки");
+    println("  Предупреждение: элемент <choice> требует ручной обработки");
 
     // Временная реализация - обрабатываем как последовательность
 
     Field vField;
 
-    vField.type = "std::variant<";
+    vField.type = "// std::variant<";
 
     for(auto&& child: *choice) {
         string_view elementName = child->name();
@@ -1115,10 +1016,13 @@ void Parser::parseChoiceElements(const XML::Element* choice, ComplexType& comple
             field.maxOccurs = 1;
             vField.name += field.name + '_';
             vField.type += field.type + ", ";
+            if(field.documentation.size())
+                vField.documentation += field.documentation + '\n';
         }
     }
 
     if(!vField.name.empty()) {
+        if(vField.documentation.size()) vField.documentation.pop_back();
         vField.type.pop_back();
         vField.type.back() = '>';
         complexType.fields.push_back(vField);
@@ -1156,8 +1060,7 @@ void Parser::parseAllElements(const XML::Element* all,
     }
 }
 
-void Parser::parseGroupReference(const XML::Element* groupRef,
-    ComplexType& complexType) {
+void Parser::parseGroupReference(const XML::Element* groupRef, ComplexType& complexType) {
     if(!groupRef) return;
 
     string_view refName = groupRef->attrVal("ref");
@@ -1166,7 +1069,10 @@ void Parser::parseGroupReference(const XML::Element* groupRef,
         return;
     }
 
-    println(std::cout, "  Информация: ссылка на группу '{}' - группы требуют предварительного определения", refName);
+    if(auto it = groups.find(refName); it == groups.end())
+        println("  Информация: ссылка на группу '{}' - группы требуют предварительного определения", refName);
+    else
+        complexType.fields.append_range(it->second.fields);
 
     // В полной реализации здесь нужно найти определение группы
     // и добавить все её элементы в complexType
@@ -1193,26 +1099,22 @@ void Parser::parseElementDetails(const XML::Element* elementNode, Field& field) 
         if(!isbuiltin) field.type = toCamelCase(field.type);
     } else {
         // Проверяем встроенный тип
-        const XML::Element* simpleType = elementNode->firstChild("xs:simpleType");
-        if(!simpleType) simpleType = elementNode->firstChild("simpleType");
 
-        const XML::Element* complexTypeElem = elementNode->firstChild("xs:complexType");
-        if(!complexTypeElem) complexTypeElem = elementNode->firstChild("complexType");
-
-        if(simpleType) {
+        if(const XML::Element* simpleType = elementNode->firstChildOf({"xs:simpleType", "simpleType"});
+            simpleType) {
             // Обрабатываем встроенный простой тип
             field.type = "std::string"; // По умолчанию
 
-            const XML::Element* restriction = simpleType->firstChild("xs:restriction");
-            if(!restriction) restriction = simpleType->firstChild("restriction");
-            if(restriction) {
+            if(const XML::Element* restriction = simpleType->firstChildOf({"xs:restriction", "restriction"});
+                restriction) {
                 if(string_view base = restriction->attrVal("base"); base.size()) {
                     bool isbuiltin{};
                     field.type = convertXsdTypeToCpp(base, &isbuiltin);
                     if(!isbuiltin) field.type = toCamelCase(field.type);
                 }
             }
-        } else if(complexTypeElem) {
+        } else if(const XML::Element* complexTypeElem = elementNode->firstChildOf({"xs:complexType", "complexType"});
+            complexTypeElem) {
             const_cast<XML::Element*>(complexTypeElem)->attributes.emplace_back("name"sv, toCamelCase(field.name));
             parseComplexType(complexTypeElem);
             field.type = complexTypes.back().name;
@@ -1263,18 +1165,12 @@ void Parser::parseElementDetails(const XML::Element* elementNode, Field& field) 
 
     // Обрабатываем значение по умолчанию
     if(string_view defaultValue = elementNode->attrVal("default"); defaultValue.size()) {
-        if(!field.documentation.empty()) {
-            field.documentation += " ";
-        }
-        field.documentation += "[По умолчанию: " + std::string(defaultValue) + "]";
+        field.documentation += "\n[По умолчанию: " + std::string(defaultValue) + "]";
     }
 
     // Обрабатываем фиксированное значение
     if(string_view fixedValue = elementNode->attrVal("fixed"); fixedValue.size()) {
-        if(!field.documentation.empty()) {
-            field.documentation += " ";
-        }
-        field.documentation += "[Фиксированное значение: " + std::string(fixedValue) + "]";
+        field.documentation += "\n[Фиксированное значение: " + std::string(fixedValue) + "]";
     }
 
     // Обрабатываем nillable
@@ -1289,20 +1185,18 @@ void Parser::handleComplexContent(const XML::Element* complexContent,
     if(!complexContent) return;
 
     // Обрабатываем extension (наследование)
-    const XML::Element* extension = complexContent->firstChild("xs:extension");
-    if(!extension) extension = complexContent->firstChild("extension");
 
-    if(extension) {
+    if(const XML::Element* extension = complexContent->firstChildOf({"xs:extension", "extension"});
+        extension) {
 
         if(string_view base = extension->attrVal("base"); base.size()) {
             complexType.baseType = convertXsdTypeToCpp(base);
         }
 
         // Обрабатываем содержимое extension
-        const XML::Element* sequence = extension->firstChild("xs:sequence");
-        if(!sequence) sequence = extension->firstChild("sequence");
 
-        if(sequence) {
+        if(const XML::Element* sequence = extension->firstChildOf({"xs:sequence", "sequence"});
+            sequence) {
             parseSequenceElements(sequence, complexType);
         }
 
@@ -1311,12 +1205,11 @@ void Parser::handleComplexContent(const XML::Element* complexContent,
     }
 
     // Обрабатываем restriction
-    const XML::Element* restriction = complexContent->firstChild("xs:restriction");
-    if(!restriction) restriction = complexContent->firstChild("restriction");
 
-    if(restriction) {
+    if(const XML::Element* restriction = complexContent->firstChildOf({"xs:restriction", "restriction"});
+        restriction) {
         // Обработка restriction (более сложная)
-        println(std::cout, "  Предупреждение: complexContent/restriction требует специальной обработки");
+        println("  Предупреждение: complexContent/restriction требует специальной обработки");
     }
 }
 
@@ -1327,10 +1220,9 @@ void Parser::handleSimpleContent(const XML::Element* simpleContent,
     // simpleContent используется, когда complexType содержит только текст и атрибуты
 
     // Обрабатываем extension
-    const XML::Element* extension = simpleContent->firstChild("xs:extension");
-    if(!extension) extension = simpleContent->firstChild("extension");
 
-    if(extension) {
+    if(const XML::Element* extension = simpleContent->firstChildOf({"xs:extension", "extension"});
+        extension) {
 
         if(string_view base = extension->attrVal("base"); base.size()) {
             // Добавляем поле для текстового содержимого
@@ -1351,10 +1243,9 @@ void Parser::handleSimpleContent(const XML::Element* simpleContent,
     }
 
     // Обрабатываем restriction
-    const XML::Element* restriction = simpleContent->firstChild("xs:restriction");
-    if(!restriction) restriction = simpleContent->firstChild("restriction");
 
-    if(restriction) {
+    if(const XML::Element* restriction = simpleContent->firstChildOf({"xs:restriction", "restriction"});
+        restriction) {
 
         if(std::string_view base = restriction->attrVal("base"); base.size()) {
             Field textField;
@@ -1374,7 +1265,7 @@ void Parser::handleSimpleContent(const XML::Element* simpleContent,
 // Вспомогательные методы
 #if 0
 bool Parser::isBuiltInType(const string& typeName) const {
-    println(std::cout, ">>>{}", typeName);
+    println(/*std::cout, */">>>{}", typeName);
 
     // Проверяем, является ли тип встроенным XSD типом
     static const vector<string> builtInTypes = {
